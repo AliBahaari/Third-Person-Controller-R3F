@@ -1,6 +1,11 @@
 import { useKeyboardControls } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { RapierRigidBody, RigidBody } from "@react-three/rapier";
+import {
+  RapierRigidBody,
+  RigidBody,
+  type CollisionEnterPayload,
+  type CollisionExitPayload,
+} from "@react-three/rapier";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
@@ -11,6 +16,7 @@ export default function Scene() {
   const smoothedCharacterTranslationRef = useRef(new THREE.Vector3());
   const smoothedCharacterRotationRef = useRef(new THREE.Quaternion());
   const towardAngleRef = useRef(0);
+  const isGroundedRef = useRef(false);
 
   useFrame((state) => {
     if (
@@ -23,6 +29,13 @@ export default function Scene() {
     const smoothedCharacterTranslations =
       smoothedCharacterTranslationRef.current;
     const smoothedCharacterRotation = smoothedCharacterRotationRef.current;
+
+    const { x: pointerX } = state.pointer;
+    if (pointerX > 0.5) {
+      towardAngleRef.current -= Math.PI / 60;
+    } else if (pointerX < -0.5) {
+      towardAngleRef.current += Math.PI / 60;
+    }
 
     const { Forward, Rightward, Backward, Leftward, Speed } = getKeys();
 
@@ -87,7 +100,7 @@ export default function Scene() {
     const unsubscribeJumpKey = subscribeKeys(
       (state) => state.Jump,
       (isPressed) => {
-        if (isPressed) {
+        if (isPressed && isGroundedRef.current) {
           if (!characterRef.current) return;
 
           const character = characterRef.current;
@@ -109,16 +122,29 @@ export default function Scene() {
     };
   }, []);
 
+  const handleCharacterCollisionEnter = (event: CollisionEnterPayload) => {
+    if (event.colliderObject?.name === "SURFACE") isGroundedRef.current = true;
+  };
+
+  const handleCharacterCollisionExit = (event: CollisionExitPayload) => {
+    if (event.colliderObject?.name === "SURFACE") isGroundedRef.current = false;
+  };
+
   return (
     <>
-      <RigidBody ref={characterRef} position={[0, 1, 0]}>
+      <RigidBody
+        ref={characterRef}
+        position={[0, 1, 0]}
+        onCollisionEnter={handleCharacterCollisionEnter}
+        onCollisionExit={handleCharacterCollisionExit}
+      >
         <mesh>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial color={"#FFC857"} />
         </mesh>
       </RigidBody>
 
-      <RigidBody type="fixed" rotation={[-Math.PI / 2, 0, 0]}>
+      <RigidBody name="SURFACE" type="fixed" rotation={[-Math.PI / 2, 0, 0]}>
         <mesh>
           <planeGeometry args={[20, 20, 20]} />
           <meshStandardMaterial color={"#101010"} />
